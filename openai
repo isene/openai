@@ -13,7 +13,7 @@ require "ruby/openai"
 
 def model
   c = %w(text-davinci-003 code-cushman-001 text-curie-001 text-ada-001)
-  m = @prompt.select("What AI model to use?") do |menu|
+  m = @prompt.select("What AI model do you want to use?") do |menu|
     menu.choice c[0], 0
     menu.choice c[1], 1
     menu.choice c[2], 2
@@ -39,7 +39,13 @@ end
 optparse.parse!
 
 # READ USER CONF
-load(Dir.home+'/.openai.conf')
+if File.exist?(Dir.home+'/.openai.conf') 
+  load(Dir.home+'/.openai.conf')
+else
+  File.write(Dir.home+'/.openai.conf', "@ai = 'your-secret-openai-key'")
+  puts "Edit '.openai.conf' in your home directory and edit in your secret openai key."
+  puts "To retrieve such a key, create an account at beta.openai.com and get the key from your account menu (upper right on the web page)"
+end
 
 # PROCESS QUERY
 if @f
