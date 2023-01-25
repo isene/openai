@@ -1,0 +1,67 @@
+#!/usr/bin/env ruby
+# encoding: utf-8
+
+# GET EXTENSIONS
+require 'optparse'
+require 'tty-prompt'
+require "ruby/openai"
+
+# INITIALIZE CONSTANTS
+@x      = 200
+@m      = "text-davinci-003"
+@prompt = TTY::Prompt.new
+
+def model
+  c = %w(text-davinci-003 code-cushman-001 text-curie-001 text-ada-001)
+  m = @prompt.select("What AI model to use?") do |menu|
+    menu.choice c[0], 0
+    menu.choice c[1], 1
+    menu.choice c[2], 2
+    menu.choice c[3], 3
+  end
+  return c[m]
+end
+
+# HANDLE COMMAND LINE OPTIONS
+options = {}
+optparse = OptionParser.new do |opts|
+  # Set a banner, displayed at the top of the help screen.
+  opts.banner = "Usage: openai [options]"
+
+  # Define the options, and what they do
+  opts.on('-f', '--file textfile', 'A file to process')                               { |f| @f = f }
+  opts.on('-t', '--text text', 'The text to process')                                 { |t| @t = t }
+  opts.on('-x', '--max max_tokens', 'Specify max number of words in response')        { |x| @x = x.to_i }
+  opts.on('-m', '--model', 'The AI model to use (default = text-davinci-003i)')       { @m = model } 
+  opts.on('-h', 'Display SHORT help text')                                            { puts opts; exit }
+  opts.on('-v', '--version', 'Display the version number')                            { puts "Version: 0.1"; exit }
+end
+optparse.parse!
+
+# READ USER CONF
+load(Dir.home+'/.openai.conf')
+
+# PROCESS QUERY
+if @f
+  @q = File.read(f)
+elsif @t
+  @q = @t
+else
+  puts "You must supply a query in form of a text file (option -f file) or text (option -t text)\n\n"
+  exit
+end
+
+# REQUEST RESPONSE
+client = OpenAI::Client.new(access_token: @ai)
+
+response = client.completions( parameters: { model: @m, prompt: @q, max_tokens: @x })
+
+#PRINT RESPONSE
+begin
+  output = response["choices"][0]["text"]
+rescue
+  output = "No OpenAI response"
+end
+puts output.strip + "\n\n"
+
+# vim: set sw=2 sts=2 et ft=ruby fdm=syntax fdn=2 fcs=fold\:\ :
