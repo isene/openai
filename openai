@@ -13,13 +13,8 @@ require "ruby/openai"
 
 def model
   c = %w(text-davinci-003 code-cushman-001 text-curie-001 text-ada-001)
-  m = @prompt.select("What AI model do you want to use?") do |menu|
-    menu.choice c[0], 0
-    menu.choice c[1], 1
-    menu.choice c[2], 2
-    menu.choice c[3], 3
-  end
-  return c[m]
+  m = @prompt.select("What AI model do you want to use? (see https://beta.openai.com/docs/models/codex for details)", c, cycle: true)
+  return m
 end
 
 # HANDLE COMMAND LINE OPTIONS
