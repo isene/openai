@@ -49,7 +49,7 @@ end
 
 # PROCESS QUERY
 if @f
-  @q = File.read(f)
+  @q = File.read(@f)
 elsif @t
   @q = @t
 else
