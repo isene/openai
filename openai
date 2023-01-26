@@ -60,7 +60,11 @@ end
 # REQUEST RESPONSE
 client = OpenAI::Client.new(access_token: @ai)
 
-response = client.completions( parameters: { model: @m, prompt: @q, max_tokens: @x })
+begin
+  response = client.completions( parameters: { model: @m, prompt: @q, max_tokens: @x })
+rescue => error
+  p error
+end
 
 #PRINT RESPONSE
 begin
