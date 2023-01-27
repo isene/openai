@@ -28,6 +28,7 @@ optparse = OptionParser.new do |opts|
   opts.on('-t', '--text text', 'The text to process')                                 { |t| @t = t }
   opts.on('-x', '--max max_tokens', 'Specify max number of words in response')        { |x| @x = x.to_i }
   opts.on('-m', '--model', 'The AI model to use (default = text-davinci-003i)')       { @m = model } 
+  opts.on('-i', '--image', 'Create an image with the text supplied by -t or -f')      { @i = true } 
   opts.on('-h', 'Display SHORT help text')                                            { puts opts; exit }
   opts.on('-v', '--version', 'Display the version number')                            { puts "Version: 0.1"; exit }
 end
@@ -52,21 +53,25 @@ else
   exit
 end
 
-# REQUEST RESPONSE
+# REQUEST AND PRINT RESPONSE
 client = OpenAI::Client.new(access_token: @ai)
 
 begin
-  response = client.completions( parameters: { model: @m, prompt: @q, max_tokens: @x })
+  if @i
+    response = client.images.generate(parameters: { prompt: @q })
+    puts "Image url:"
+    puts response.dig("data", 0, "url")
+  else
+    response = client.completions( parameters: { model: @m, prompt: @q, max_tokens: @x })
+    begin
+      output = response["choices"][0]["text"]
+    rescue
+      output = "No OpenAI response"
+    end
+    puts output.strip + "\n\n"
+  end
 rescue => error
   p error
 end
-
-#PRINT RESPONSE
-begin
-  output = response["choices"][0]["text"]
-rescue
-  output = "No OpenAI response"
-end
-puts output.strip + "\n\n"
 
 # vim: set sw=2 sts=2 et ft=ruby fdm=syntax fdn=2 fcs=fold\:\ :
