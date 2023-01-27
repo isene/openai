@@ -25,7 +25,9 @@ Examples:
 `openai -t "Give me a compliment"`
 `openai -t "A castle in a forest" -i`
 
-## Dependencies
+## Installation and dependencies
+
+Either do `gem install openai-term` or clone this directory and do:
 
 ```
 gem install "tty-prompt"
