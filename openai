@@ -44,13 +44,12 @@ else
 end
 
 # PROCESS QUERY
-if @f
-  @q = File.read(@f)
-elsif @t
-  @q = @t
-else
-  puts "You must supply a query in form of a text file (option -f file) or text (option -t text)\n\n"
-  exit
+@q  = ""
+@q += @t if @t
+@q += File.read(@f) if @f
+unless @f or @t
+  puts "You must supply a query in form of a text file (option -f file) and/or text (option -t text)\n\n"
+  exit 
 end
 
 # REQUEST AND PRINT RESPONSE
