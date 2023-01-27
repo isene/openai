@@ -64,8 +64,9 @@ begin
     response = client.completions( parameters: { model: @m, prompt: @q, max_tokens: @x })
     begin
       output = response["choices"][0]["text"]
-    rescue
-      output = "No OpenAI response"
+    rescue => error
+      p error
+      output = response["error"]["message"]
     end
     puts output.strip + "\n\n"
   end
