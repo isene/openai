@@ -45,8 +45,8 @@ end
 
 # PROCESS QUERY
 @q  = ""
-@q += File.read(@f) if @f
 @q += @t if @t
+@q += File.read(@f) if @f
 unless @f or @t
   puts "You must supply a query in form of a text file (option -f file) and/or text (option -t text)\n\n"
   exit 
