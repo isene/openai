@@ -8,7 +8,7 @@ require "ruby/openai"
 
 # INITIALIZE CONSTANTS
 @x      = 200
-@m      = "text-davinci-003"
+@m      = "gpt-3.5-turbo-instruct"
 @prompt = TTY::Prompt.new
 
 def model
@@ -27,7 +27,7 @@ optparse = OptionParser.new do |opts|
   opts.on('-f', '--file textfile', 'A file to process')                               { |f| @f = f }
   opts.on('-t', '--text text', 'The text to process')                                 { |t| @t = t }
   opts.on('-x', '--max max_tokens', 'Specify max number of words in response')        { |x| @x = x.to_i }
-  opts.on('-m', '--model', 'The AI model to use (default = text-davinci-003i)')       { @m = model } 
+  opts.on('-m', '--model', 'The AI model to use (default = gpt-3.5-turbo-instruct')   { @m = model } 
   opts.on('-i', '--image', 'Create an image with the text supplied by -t or -f')      { @i = true } 
   opts.on('-h', 'Display SHORT help text')                                            { puts opts; exit }
   opts.on('-v', '--version', 'Display the version number')                            { puts "Version: 0.1"; exit }
