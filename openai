@@ -7,15 +7,9 @@ require 'tty-prompt'
 require "ruby/openai"
 
 # INITIALIZE CONSTANTS
-@x      = 200
+@x      = 500
 @m      = "gpt-3.5-turbo-instruct"
 @prompt = TTY::Prompt.new
-
-def model
-  c = %w(text-davinci-003 code-cushman-001 text-curie-001 text-ada-001)
-  m = @prompt.select("What AI model do you want to use? (see https://beta.openai.com/docs/models/codex for details)", c, cycle: true)
-  return m
-end
 
 # HANDLE COMMAND LINE OPTIONS
 options = {}
@@ -27,7 +21,8 @@ optparse = OptionParser.new do |opts|
   opts.on('-f', '--file textfile', 'A file to process')                               { |f| @f = f }
   opts.on('-t', '--text text', 'The text to process')                                 { |t| @t = t }
   opts.on('-x', '--max max_tokens', 'Specify max number of words in response')        { |x| @x = x.to_i }
-  opts.on('-m', '--model', 'The AI model to use (default = gpt-3.5-turbo-instruct')   { @m = model } 
+  opts.on('-m', '--model', 'The AI model to use (default = gpt-3.5-turbo-instruct)')  { |m| @m = m } 
+  opts.on('-M', '--listmodels', 'List available models, pick and use')                { @m = "list" }
   opts.on('-i', '--image', 'Create an image with the text supplied by -t or -f')      { @i = true } 
   opts.on('-h', 'Display SHORT help text')                                            { puts opts; exit }
   opts.on('-v', '--version', 'Display the version number')                            { puts "Version: 0.1"; exit }
@@ -53,7 +48,12 @@ unless @f or @t
 end
 
 # REQUEST AND PRINT RESPONSE
-client = OpenAI::Client.new(access_token: @ai)
+client = OpenAI::Client.new(access_token: @ai, log_errors: true)
+
+if @m == "list"
+  c = client.models.list["data"].map.each { |i| i["id"] }
+  @m = @prompt.select("What AI model do you want to use? (see https://beta.openai.com/docs/models/codex for details)", c, cycle: true)
+end
 
 begin
   if @i

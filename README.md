@@ -15,7 +15,8 @@ Usage: openai [options]
     -f, --file textfile              A file to process
     -t, --text text                  The text to process
     -x, --max max_tokens             Specify max number of words in response
-    -m, --model                      The AI model to use (default = text-davinci-003i)
+    -m, --model                      The AI model to use (default = gpt-3.5-turbo-instruct)
+    -M, --listmodels                 List available models, pick and use
     -i, --image                      Create an image with the text supplied by -t or -f
     -h                               Display SHORT help text
     -v, --version                    Display the version number
