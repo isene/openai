@@ -1,37 +1,188 @@
-# OpenAI interface for the terminal
+# OpenAI Terminal 2.0 - Modern TUI for OpenAI
 
-ChatGPT for your terminal.
+A powerful, modern terminal interface for OpenAI's API featuring a full Text User Interface (TUI) built with rcurses. Version 2.0 is a complete rewrite offering interactive chat sessions, conversation management, model selection, and much more - all from your terminal.
 
-This is a pretty straight forward interface to OpenAI with the option to
-select the AI model and the maximum token length (number of maximum words in
-the AI's response"). You will use the `-t` option to supply the query to
-OpenAI or the `-f` option to read the query from a text file instead.
+![Ruby](https://img.shields.io/badge/language-Ruby-red) [![Gem Version](https://badge.fury.io/rb/openai-term.svg)](https://badge.fury.io/rb/openai-term) ![Unlicense](https://img.shields.io/badge/license-Unlicense-green) ![Stay Amazing](https://img.shields.io/badge/Stay-Amazing-important)
 
-You generate an image with the `-i` option in combination with a query
-supplied via either the `-t`or the `-f`options.
+## 🎉 Version 2.0 - Major Release!
 
+**Complete rewrite** with modern TUI interface using rcurses. This is a major upgrade from the simple command-line tool to a full-featured terminal application.
+
+## ✨ Features
+
+### Core Functionality
+- **🎮 Interactive Chat Interface**: Full TUI with separate panes for chat history and input
+- **🤖 Model Selection**: Browse and select from available OpenAI models in real-time
+- **🖼️ Image Generation**: Generate images with DALL-E using dedicated commands
+- **💾 Conversation Management**: Save, load, and manage conversation history
+- **📋 Clipboard Integration**: Copy AI responses to system clipboard
+- **🎨 Color-coded Interface**: Beautiful, easy-to-read colored output
+
+### User Experience
+- **⌨️ Vim-like Controls**: Command mode with printable characters entering input mode
+- **📜 Input History**: Navigate through previous messages with arrow keys
+- **🔄 Model Persistence**: Remembers your preferred model between sessions
+- **📁 Session Management**: Auto-save conversations and settings
+- **❓ Built-in Help**: Comprehensive help system with keyboard shortcuts
+- **📊 Version Checking**: Check for updates from RubyGems
+
+### Advanced Features
+- **🚀 Quiet Mode**: Skip TUI for direct command-line usage in scripts
+- **⚙️ Configurable Parameters**: Set max tokens, temperature, and other options
+- **🎯 Multiple Input Methods**: Type directly, load from files, or use command-line args
+- **🔒 Secure Configuration**: API key stored in separate config file
+
+## 📦 Installation
+
+```bash
+gem install openai-term
 ```
+
+## 🚀 Quick Start
+
+### Interactive Mode (Recommended)
+```bash
+openai
+```
+
+### Command Line Usage
+```bash
+# Quick question
+openai -t "What is quantum computing?"
+
+# Load from file
+openai -f my_question.txt
+
+# Generate image
+openai -i -t "A beautiful sunset over mountains"
+
+# Use specific model
+openai -m gpt-4 -t "Write a poem about code"
+
+# Quiet mode (no TUI)
+openai -q -t "Quick answer needed"
+```
+
+## ⌨️ Keyboard Controls
+
+| Key | Action |
+|-----|--------|
+| **Ctrl-Q** | Quit application |
+| **Ctrl-M** | Select AI model |
+| **Ctrl-H** | Show help |
+| **Ctrl-C** | Clear chat history |
+| **Ctrl-L** | Load saved conversation |
+| **Ctrl-S** | Save conversation |
+| **Ctrl-Y** | Copy last AI response to clipboard |
+| **Ctrl-V** | Show version information |
+| **Ctrl-I** | Generate image |
+| **↑/↓** | Navigate input history |
+| **Any char** | Start typing message |
+| **ESC** | Cancel input (in edit mode) |
+
+## ⚙️ Configuration
+
+### API Key Setup
+On first run, edit `~/.openai.conf`:
+```ruby
+@ai = 'your-openai-api-key-here'
+```
+
+Get your API key from: https://platform.openai.com/api-keys
+
+### Command Line Options
+```bash
 Usage: openai [options]
-    -f, --file textfile              A file to process
-    -t, --text text                  The text to process
-    -x, --max max_tokens             Specify max number of words in response
-    -m, --model                      The AI model to use (default = gpt-3.5-turbo-instruct)
-    -M, --listmodels                 List available models, pick and use
-    -i, --image                      Create an image with the text supplied by -t or -f
-    -h                               Display SHORT help text
-    -v, --version                    Display the version number
+  -f, --file FILE          Load initial query from file
+  -t, --text TEXT          Initial query text
+  -m, --model MODEL        AI model (default: gpt-3.5-turbo)
+  -x, --max-tokens N       Max tokens (default: 2048)
+  -T, --temperature N      Temperature 0-2 (default: 0.7)
+  -i, --image             Generate image instead of text
+  -c, --config FILE       Config file path
+  -q, --quiet             Skip TUI and output to stdout
+  -h, --help              Display help
+  -v, --version           Display version
 ```
 
-Examples: 
-`openai -t "Give me a compliment"`
-`openai -t "A castle in a forest" -i`
+## 📁 Files
 
-## Installation and dependencies
+- **Config**: `~/.openai.conf` - API key configuration
+- **History**: `~/.openai_history.json` - Conversation history and settings
 
-Either do `gem install openai-term` or clone this directory and do:
+## 🔧 Requirements
 
+- Ruby 2.7+
+- rcurses gem (~> 3.5)
+- ruby-openai gem (~> 3.0)
+
+## 🆕 What's New in 2.0
+
+### Major Changes
+- **Complete rewrite** using rcurses for modern TUI
+- **Interactive chat interface** with proper panes and layouts
+- **Real-time model selection** with live preview
+- **Conversation management** - save, load, and organize chats
+- **Enhanced input handling** with vim-like behavior
+- **Clipboard integration** for easy sharing
+- **Persistent settings** - remembers your preferences
+
+### Improved Features
+- **Better error handling** and user feedback
+- **Popup windows** for help and model selection
+- **Scrollable content** in all interface elements
+- **Input history navigation** with arrow keys
+- **Cancellable operations** with ESC key
+- **Version checking** against RubyGems
+
+### New Functionality
+- Load previous conversations and continue them
+- Copy AI responses directly to clipboard
+- Navigate through input history
+- Interactive model switching
+- Comprehensive help system
+- Version and update checking
+
+## 📚 Examples
+
+### Interactive Session
+```bash
+# Start the app
+openai
+
+# Type your message and press Enter
+# Use Ctrl-M to change models
+# Use Ctrl-S to save conversations
+# Use Ctrl-L to load previous chats
 ```
-gem install "tty-prompt"
-gem install "ruby-openai"
+
+### Scripting and Automation
+```bash
+# Get quick answers
+openai -q -t "What's 2+2?"
+
+# Process files
+openai -q -f input.txt > output.txt
+
+# Generate images for automation
+openai -i -q -t "Logo design" > image_url.txt
 ```
 
+## 🔄 Migration from 1.x
+
+Version 2.0 maintains compatibility with 1.x command-line usage while adding the powerful TUI interface. Your existing scripts will continue to work, but you can now enjoy the interactive experience when running without the `-q` flag.
+
+## 🤝 Contributing
+
+This project is public domain. Feel free to use, modify, and distribute as needed.
+
+## 🔗 Links
+
+- **Gem**: https://rubygems.org/gems/openai-term
+- **Source**: https://github.com/isene/openai
+- **rcurses**: https://github.com/isene/rcurses
+- **Author**: https://isene.com
+
+---
+
+*Built with ❤️ using [rcurses](https://github.com/isene/rcurses) for an amazing terminal experience.*

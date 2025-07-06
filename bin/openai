@@ -1,77 +1,884 @@
 #!/usr/bin/env ruby
 # encoding: utf-8
 
-# GET EXTENSIONS
+# OpenAI Terminal Interface with rcurses
+# A modern TUI for interacting with OpenAI's API
+
 require 'optparse'
-require 'tty-prompt'
-require "ruby/openai"
+require 'ruby/openai'
+require 'rcurses'
+require 'json'
+require 'fileutils'
 
-# INITIALIZE CONSTANTS
-@x      = 500
-@m      = "gpt-3.5-turbo-instruct"
-@prompt = TTY::Prompt.new
+include Rcurses
+include Rcurses::Input
+include Rcurses::Cursor
 
-# HANDLE COMMAND LINE OPTIONS
-options = {}
-optparse = OptionParser.new do |opts|
-  # Set a banner, displayed at the top of the help screen.
-  opts.banner = "Usage: openai [options]"
+# Constants
+CONFIG_FILE = File.join(Dir.home, '.openai.conf')
+HISTORY_FILE = File.join(Dir.home, '.openai_history.json')
+DEFAULT_MODEL = "gpt-3.5-turbo"
+DEFAULT_MAX_TOKENS = 2048
+VERSION = "2.0"
 
-  # Define the options, and what they do
-  opts.on('-f', '--file textfile', 'A file to process')                               { |f| @f = f }
-  opts.on('-t', '--text text', 'The text to process')                                 { |t| @t = t }
-  opts.on('-x', '--max max_tokens', 'Specify max number of words in response')        { |x| @x = x.to_i }
-  opts.on('-m', '--model', 'The AI model to use (default = gpt-3.5-turbo-instruct)')  { |m| @m = m } 
-  opts.on('-M', '--listmodels', 'List available models, pick and use')                { @m = "list" }
-  opts.on('-i', '--image', 'Create an image with the text supplied by -t or -f')      { @i = true } 
-  opts.on('-h', 'Display SHORT help text')                                            { puts opts; exit }
-  opts.on('-v', '--version', 'Display the version number')                            { puts "Version: 0.1"; exit }
-end
-optparse.parse!
+# Global variables
+@model = DEFAULT_MODEL
+@max_tokens = DEFAULT_MAX_TOKENS
+@temperature = 0.7
+@conversation_history = []
+@current_conversation = []
+@api_key = nil
+@client = nil
 
-# READ USER CONF
-if File.exist?(Dir.home+'/.openai.conf') 
-  load(Dir.home+'/.openai.conf')
-else
-  File.write(Dir.home+'/.openai.conf', "@ai = 'your-secret-openai-key'")
-  puts "Edit '.openai.conf' in your home directory and edit in your secret openai key."
-  puts "To retrieve such a key, create an account at beta.openai.com and get the key from your account menu (upper right on the web page)"
-end
+# UI elements
+@header = nil
+@chat_pane = nil
+@input_pane = nil
+@status_pane = nil
+@model_list_pane = nil
 
-# PROCESS QUERY
-@q  = ""
-@q += @t if @t
-@q += File.read(@f) if @f
-unless @f or @t
-  puts "You must supply a query in form of a text file (option -f file) and/or text (option -t text)\n\n"
-  exit 
-end
+# UI state
+@mode = :chat  # :chat, :model_select, :help
+@input_text = ""
+@chat_scroll = 0
+@selected_model = 0
 
-# REQUEST AND PRINT RESPONSE
-client = OpenAI::Client.new(access_token: @ai, log_errors: true)
-
-if @m == "list"
-  c = client.models.list["data"].map.each { |i| i["id"] }
-  @m = @prompt.select("What AI model do you want to use? (see https://beta.openai.com/docs/models/codex for details)", c, cycle: true)
-end
-
-begin
-  if @i
-    response = client.images.generate(parameters: { prompt: @q })
-    puts "Image url:"
-    puts response.dig("data", 0, "url")
-  else
-    response = client.completions( parameters: { model: @m, prompt: @q, max_tokens: @x })
-    begin
-      output = response["choices"][0]["text"]
-    rescue => error
-      p error
-      output = response["error"]["message"]
-    end
-    puts output.strip + "\n\n"
+# Parse command line options
+def parse_options
+  options = {}
+  optparse = OptionParser.new do |opts|
+    opts.banner = "Usage: openai [options]"
+    
+    opts.on('-f', '--file FILE', 'Load initial query from file') { |f| options[:file] = f }
+    opts.on('-t', '--text TEXT', 'Initial query text') { |t| options[:text] = t }
+    opts.on('-m', '--model MODEL', "AI model (default: #{DEFAULT_MODEL})") { |m| @model = m }
+    opts.on('-x', '--max-tokens N', Integer, "Max tokens (default: #{DEFAULT_MAX_TOKENS})") { |x| @max_tokens = x }
+    opts.on('-T', '--temperature N', Float, 'Temperature 0-2 (default: 0.7)') { |t| @temperature = t }
+    opts.on('-i', '--image', 'Generate image instead of text') { options[:image] = true }
+    opts.on('-c', '--config FILE', 'Config file path') { |c| options[:config] = c }
+    opts.on('-q', '--quiet', 'Skip TUI and output to stdout directly') { options[:quiet] = true }
+    opts.on('-h', '--help', 'Display help') { puts opts; exit }
+    opts.on('-v', '--version', 'Display version') { puts "OpenAI Terminal 2.0"; exit }
   end
-rescue => error
-  p error
+  
+  optparse.parse!
+  options
 end
 
-# vim: set sw=2 sts=2 et ft=ruby fdm=syntax fdn=2 fcs=fold\:\ :
+# Load configuration
+def load_config(config_path = nil)
+  config_file = config_path || CONFIG_FILE
+  
+  if File.exist?(config_file)
+    load(config_file)
+    @api_key = @ai if defined?(@ai)
+  else
+    FileUtils.mkdir_p(File.dirname(config_file))
+    File.write(config_file, "@ai = 'your-secret-openai-key'")
+    puts "Created config file: #{config_file}"
+    puts "Please edit it and add your OpenAI API key."
+    puts "Get your key from: https://platform.openai.com/api-keys"
+    exit 1
+  end
+  
+  unless @api_key && @api_key != 'your-secret-openai-key'
+    puts "Error: Invalid API key in #{config_file}"
+    puts "Please add your OpenAI API key to the config file."
+    exit 1
+  end
+end
+
+# Load conversation history
+def load_history
+  return unless File.exist?(HISTORY_FILE)
+  
+  begin
+    data = JSON.parse(File.read(HISTORY_FILE))
+    @conversation_history = data['conversations'] || []
+    @current_conversation = data['current'] || []
+    
+    # Restore last used model if available
+    if data['last_model'] && !data['last_model'].empty?
+      @model = data['last_model']
+    end
+  rescue => e
+    @conversation_history = []
+    @current_conversation = []
+  end
+end
+
+# Save conversation history
+def save_history
+  data = {
+    'conversations' => @conversation_history.last(100), # Keep last 100 conversations
+    'current' => @current_conversation.last(50), # Keep last 50 messages in current
+    'last_model' => @model # Save the current model for next session
+  }
+  
+  File.write(HISTORY_FILE, JSON.pretty_generate(data))
+rescue => e
+  # Silently fail to not interrupt user experience
+end
+
+# Initialize OpenAI client
+def init_client
+  @client = OpenAI::Client.new(
+    access_token: @api_key,
+    log_errors: false
+  )
+end
+
+# Setup UI
+def setup_ui
+  rows, cols = IO.console.winsize
+  
+  Rcurses.clear_screen
+  Cursor.hide
+  
+  # Create panes - accounting for borders being drawn outside pane geometry
+  @header = Pane.new(1, 1, cols, 1, 255, 24)
+  @header.border = false  # Top pane doesn't need border
+  
+  @chat_pane = Pane.new(1, 3, cols, rows - 7, 255, 232)
+  @chat_pane.border = true
+  
+  @input_pane = Pane.new(1, rows - 2, cols, 1, 255, 234)
+  @input_pane.border = true
+  
+  @status_pane = Pane.new(1, rows, cols, 1, 255, 236)
+  
+  # Popup panes (created but not displayed initially)
+  help_w = cols * 3 / 4
+  help_h = rows * 3 / 4
+  @help_pane = Pane.new((cols - help_w) / 2 + 1, (rows - help_h) / 2 + 1, help_w, help_h, 255, 234)
+  @help_pane.border = true
+  
+  model_w = cols / 2
+  model_h = rows / 2
+  @model_list_pane = Pane.new((cols - model_w) / 2 + 1, (rows - model_h) / 2 + 1, model_w, model_h, 255, 233)
+  @model_list_pane.border = true
+  
+  # Conversation list pane
+  conv_w = cols * 3 / 4
+  conv_h = rows * 3 / 4
+  @conversation_list_pane = Pane.new((cols - conv_w) / 2 + 1, (rows - conv_h) / 2 + 1, conv_w, conv_h, 255, 235)
+  @conversation_list_pane.border = true
+  
+  # Popup state tracking
+  @help_visible = false
+  @model_select_visible = false
+  @conversation_list_visible = false
+  @selected_conversation = 0
+  
+  update_header
+  update_status
+  refresh_all
+  
+  # Ensure status pane is visible at startup and input pane is ready
+  @status_pane.refresh
+  @input_pane.text = ""
+  @input_pane.refresh
+end
+
+# Update header
+def update_header
+  title = "OpenAI Terminal v2.0".b.fg(226)
+  model_info = "Model: #{@model}".fg(117)
+  tokens_info = "Max Tokens: #{@max_tokens}".fg(117)
+  
+  @header.text = "#{title}  |  #{model_info}  |  #{tokens_info}"
+  @header.refresh
+end
+
+# Update status bar
+def update_status
+  case @mode
+  when :chat
+    shortcuts = [
+      "C-Q:Quit",
+      "C-M:Models", 
+      "C-H:Help",
+      "C-C:Clear",
+      "C-L:Load",
+      "C-S:Save",
+      "C-Y:Copy",
+      "C-V:Version",
+      "C-I:Image"
+    ].join("  ")
+  when :model_select
+    shortcuts = "↑↓:Navigate  Enter:Select  ESC:Cancel"
+  when :help
+    shortcuts = "Press any key to return"
+  end
+  
+  @status_pane.text = " #{shortcuts}".fg(245)
+  @status_pane.refresh
+end
+
+# Refresh all panes
+def refresh_all
+  @header.refresh
+  @chat_pane.refresh
+  @input_pane.refresh
+  @status_pane.refresh
+end
+
+# Add message to chat
+def add_to_chat(role, content)
+  if role == "system"
+    # System messages don't get a prefix and don't go in conversation history
+    prefix = ""
+    add_to_history = false
+  else
+    prefix = role == "user" ? "You: ".b.fg(226) : "AI: ".b.fg(117)
+    add_to_history = true
+  end
+  
+  # Format content with word wrapping
+  wrapped = word_wrap(content, @chat_pane.w - 6)
+  formatted = wrapped.lines.map.with_index do |line, i|
+    if i == 0 && !prefix.empty?
+      "#{prefix}#{line}"
+    else
+      prefix.empty? ? line : "     #{line}"
+    end
+  end.join
+  
+  # Add to chat
+  current_text = @chat_pane.text || ""
+  @chat_pane.text = current_text + formatted + "\n"
+  
+  # Auto-scroll to bottom and force refresh
+  @chat_pane.bottom
+  @chat_pane.full_refresh  # Use full_refresh to ensure immediate display
+  
+  # Add to conversation history (but not system messages)
+  if add_to_history
+    @current_conversation << { "role" => role, "content" => content }
+  end
+end
+
+# Word wrap text
+def word_wrap(text, width)
+  text.split("\n").map do |line|
+    if line.length <= width
+      line
+    else
+      line.scan(/.{1,#{width}}(?:\s|$)|.+/).join("\n")
+    end
+  end.join("\n")
+end
+
+# Send message to OpenAI (includes user message display)
+def send_to_openai(message, generate_image = false)
+  add_to_chat("user", message) unless generate_image
+  get_openai_response(message, generate_image)
+end
+
+# Get response from OpenAI (without adding user message)
+def get_openai_response(message, generate_image = false)
+  # Show thinking indicator
+  thinking = generate_image ? "Generating image...".i.fg(245) : "Thinking...".i.fg(245)
+  if @chat_pane
+    @chat_pane.text = (@chat_pane.text || "") + thinking + "\n"
+    @chat_pane.bottom
+    @chat_pane.full_refresh
+  else
+    puts thinking
+  end
+  
+  begin
+    if generate_image
+      response = @client.images.generate(
+        parameters: {
+          prompt: message,
+          n: 1,
+          size: "1024x1024"
+        }
+      )
+      
+      url = response.dig("data", 0, "url")
+      if url
+        content = "Image URL: #{url}"
+      else
+        content = "Error generating image"
+      end
+    elsif @model.include?("gpt")
+      # Prepare messages for chat models
+      messages = @current_conversation.map do |msg|
+        { role: msg["role"] == "user" ? "user" : "assistant", content: msg["content"] }
+      end
+      
+      response = @client.chat(
+        parameters: {
+          model: @model,
+          messages: messages,
+          max_tokens: @max_tokens,
+          temperature: @temperature
+        }
+      )
+      
+      content = response.dig("choices", 0, "message", "content")
+    else
+      # Use completion for older models
+      prompt = @current_conversation.map { |m| "#{m['role']}: #{m['content']}" }.join("\n") + "\nassistant:"
+      
+      response = @client.completions(
+        parameters: {
+          model: @model,
+          prompt: prompt,
+          max_tokens: @max_tokens,
+          temperature: @temperature
+        }
+      )
+      
+      content = response.dig("choices", 0, "text")
+    end
+    
+    # Remove thinking indicator
+    if @chat_pane
+      @chat_pane.text = @chat_pane.text.lines[0...-1].join
+    end
+    
+    if content
+      if @chat_pane
+        add_to_chat(generate_image ? "system" : "assistant", content.strip)
+        save_history unless generate_image
+      else
+        puts content.strip
+      end
+    else
+      error = response.dig("error", "message") || "Unknown error"
+      if @chat_pane
+        add_to_chat("system", "Error: #{error}".fg(196))
+      else
+        puts "Error: #{error}"
+      end
+    end
+    
+  rescue => e
+    # Remove thinking indicator
+    if @chat_pane
+      @chat_pane.text = @chat_pane.text.lines[0...-1].join
+      add_to_chat("system", "Error: #{e.message}".fg(196))
+    else
+      puts "Error: #{e.message}"
+    end
+  end
+end
+
+# Show model selection popup
+def show_model_selection
+  @model_select_visible = true
+  
+  # Get available models
+  begin
+    models_response = @client.models.list
+    @available_models = models_response["data"]
+      .map { |m| m["id"] }
+      .select { |id| id.include?("gpt") || id.include?("davinci") || id.include?("curie") }
+      .sort
+  rescue => e
+    @available_models = [@model]  # Fallback to current model
+  end
+  
+  # Ensure selected model index is valid
+  @selected_model = 0 if @selected_model >= @available_models.size
+  @model_list_pane.ix = 0  # Reset scroll position
+  
+  update_model_list
+end
+
+# Update model list display
+def update_model_list
+  content = "Select Model (↑↓ to navigate, Enter to select, Esc to cancel):".b.fg(226) + "\n\n"
+  @available_models.each_with_index do |model, i|
+    if i == @selected_model
+      content += " → #{model}".fg(226).b + "\n"
+    else
+      content += "   #{model}".fg(245) + "\n"
+    end
+  end
+  
+  @model_list_pane.text = content
+  @model_list_pane.full_refresh
+end
+
+# Hide model selection popup
+def hide_model_selection
+  @model_select_visible = false
+  Rcurses.clear_screen
+  [@header, @chat_pane, @input_pane, @status_pane].each(&:full_refresh)
+end
+
+# Show help popup
+def show_help_popup
+  @help_visible = true
+  
+  help_text = <<~HELP
+    #{"OpenAI Terminal Help".b.fg(226)}
+    
+    #{"Keyboard Shortcuts:".b.fg(117)}
+    
+    Ctrl-Q     - Quit application
+    Ctrl-M     - Select AI model
+    Ctrl-H     - Show this help
+    Ctrl-C     - Clear chat history
+    Ctrl-L     - Load saved conversation
+    Ctrl-S     - Save conversation to file
+    Ctrl-Y     - Copy last AI response to clipboard
+    Ctrl-V     - Show version information
+    Ctrl-I     - Generate image
+    Any char   - Start typing message
+    
+    #{"Features:".b.fg(117)}
+    
+    • Interactive chat with OpenAI
+    • Model selection
+    • Conversation history
+    • Auto-save conversations
+    • Configurable parameters
+    
+    #{"Configuration:".b.fg(117)}
+    
+    Config file: #{CONFIG_FILE}
+    History file: #{HISTORY_FILE}
+    
+    Press ESC to close help...
+  HELP
+  
+  @help_pane.text = help_text
+  @help_pane.ix = 0  # Reset scroll position
+  @help_pane.full_refresh
+end
+
+# Hide help popup
+def hide_help_popup
+  @help_visible = false
+  Rcurses.clear_screen
+  [@header, @chat_pane, @input_pane, @status_pane].each(&:full_refresh)
+end
+
+# Navigate input history
+def navigate_input_history(direction, input_history, current_index)
+  return if input_history.empty?
+  
+  new_index = current_index + direction
+  
+  if direction < 0  # UP - go to previous
+    new_index = [new_index, 0].max
+  else  # DOWN - go to next or beyond (empty)
+    new_index = [new_index, input_history.size].min
+  end
+  
+  @current_history_index = new_index
+  
+  if new_index < input_history.size
+    # Show historical message
+    @input_pane.text = "You: #{input_history[new_index]}"
+  else
+    # Beyond history - empty input
+    @input_pane.text = "You: "
+  end
+  
+  @input_pane.refresh
+end
+
+# Main input loop
+def input_loop
+  input_history = []
+  history_index = 0
+  @current_history_index = 0
+  
+  loop do
+    key = getchr
+    
+    
+    # Handle popup input first
+    if @help_visible
+      case key
+      when "ESC"
+        hide_help_popup
+      when "UP"
+        if @help_pane.ix > 0
+          @help_pane.ix -= 1
+          @help_pane.refresh
+        end
+      when "DOWN"
+        # Allow scrolling beyond visible content
+        total_lines = @help_pane.text.lines.count
+        visible_lines = @help_pane.h - 2  # Account for border
+        max_scroll = [total_lines - visible_lines, 0].max
+        
+        if @help_pane.ix < max_scroll
+          @help_pane.ix += 1
+          @help_pane.refresh
+        end
+      end
+      next
+    end
+    
+    if @model_select_visible
+      case key
+      when "UP"
+        if @selected_model > 0
+          @selected_model -= 1
+          # Scroll up if needed
+          visible_start = @model_list_pane.ix
+          if @selected_model < visible_start
+            @model_list_pane.ix = @selected_model
+          end
+          update_model_list
+        end
+      when "DOWN"
+        if @selected_model < @available_models.size - 1
+          @selected_model += 1
+          # Scroll down if needed
+          visible_lines = @model_list_pane.h - 4  # Account for border and header
+          visible_end = @model_list_pane.ix + visible_lines - 1
+          if @selected_model > visible_end
+            @model_list_pane.ix += 1
+          end
+          update_model_list
+        end
+      when "ENTER"
+        @model = @available_models[@selected_model]
+        save_history  # Save the new model selection
+        update_header
+        hide_model_selection
+      when "ESC"
+        hide_model_selection
+      end
+      next
+    end
+    
+    if @conversation_list_visible
+      case key
+      when "UP"
+        if @selected_conversation > 0
+          @selected_conversation -= 1
+          # Scroll up if needed
+          visible_start = @conversation_list_pane.ix
+          if @selected_conversation < visible_start
+            @conversation_list_pane.ix = @selected_conversation
+          end
+          update_conversation_list
+        end
+      when "DOWN"
+        if @selected_conversation < @conversation_history.size - 1
+          @selected_conversation += 1
+          # Scroll down if needed
+          visible_lines = @conversation_list_pane.h - 4  # Account for border and header
+          visible_end = @conversation_list_pane.ix + visible_lines - 1
+          if @selected_conversation > visible_end
+            @conversation_list_pane.ix += 1
+          end
+          update_conversation_list
+        end
+      when "ENTER"
+        load_selected_conversation
+        hide_conversation_list
+      when "ESC"
+        hide_conversation_list
+      end
+      next
+    end
+    
+    # Normal input handling when no popups are visible
+    case key
+    when "C-Q"
+      break
+    when "ENTER"  # C-M is actually ENTER in rcurses
+      show_model_selection
+    when "BACK"  # C-H is actually BACK in rcurses
+      show_help_popup
+    when "C-C"
+      @current_conversation = []
+      @chat_pane.text = ""
+      @chat_pane.refresh
+    when "C-L"
+      show_conversation_list
+    when "C-S"
+      save_conversation
+    when "C-Y"
+      copy_last_ai_response
+    when "C-V"
+      show_version
+    when "UP"
+      navigate_input_history(-1, input_history, history_index)
+      history_index = @current_history_index
+    when "DOWN"
+      navigate_input_history(1, input_history, history_index)
+      history_index = @current_history_index
+    when "C-I"
+      # Image generation
+      @input_pane.prompt = "Image: "
+      @input_pane.text = ""
+      @input_pane.editline
+      
+      # Only generate image if user didn't cancel (ESC)
+      final_text = @input_pane.text&.strip || ""
+      if final_text.length > 0
+        message = final_text
+        input_history << message
+        history_index = input_history.size
+        @current_history_index = history_index
+        send_to_openai(message, true)
+      end
+      # Reset input pane completely
+      @input_pane.clear
+      @input_pane.text = "You: "
+      @input_pane.full_refresh
+    else
+      # Any printable character -> Enter input pane editline
+      if key && key.length == 1 && key.match?(/[[:print:]]/)
+        # Set up for editline
+        @input_pane.prompt = "You: "
+        @input_pane.text = key
+        initial_text = key
+        @input_pane.editline
+        
+        # After editline returns, check what happened
+        final_text = @input_pane.text&.strip || ""
+        
+        # Check if editline was cancelled (ESC) by looking for specific patterns
+        # In rcurses, ESC typically leaves the text as-is but we need to detect cancellation
+        # We'll assume if the text is unchanged from initial OR empty, it was cancelled
+        
+        # Only send if we have actual meaningful content that's different from initial
+        if final_text.length > 0 && 
+           final_text != initial_text && 
+           !final_text.empty?
+          
+          message = final_text
+          input_history << message
+          history_index = input_history.size
+          @current_history_index = history_index
+          
+          # Send message
+          add_to_chat("user", message)
+          get_openai_response(message, false)
+        end
+        
+        # Always reset input pane completely (clears any remaining text)
+        @input_pane.text = "You: "
+        @input_pane.clear
+        @input_pane.text = "You: "
+        @input_pane.full_refresh
+      end
+    end
+  end
+end
+
+# Save current conversation
+def save_conversation
+  return if @current_conversation.empty?
+  
+  timestamp = Time.now.strftime("%Y-%m-%d %H:%M:%S")
+  @conversation_history << {
+    "timestamp" => timestamp,
+    "model" => @model,
+    "messages" => @current_conversation.dup
+  }
+  save_history
+  
+  add_to_chat("system", "Conversation saved!".fg(118))
+end
+
+# Show conversation list popup
+def show_conversation_list
+  if @conversation_history.empty?
+    add_to_chat("system", "No saved conversations found".fg(196))
+    return
+  end
+  
+  @conversation_list_visible = true
+  @selected_conversation = 0
+  @conversation_list_pane.ix = 0  # Reset scroll position
+  
+  update_conversation_list
+end
+
+# Update conversation list display
+def update_conversation_list
+  content = "Load Conversation (↑↓ to navigate, Enter to load, Esc to cancel):".b.fg(226) + "\n\n"
+  
+  @conversation_history.each_with_index do |conv, i|
+    timestamp = conv["timestamp"]
+    model = conv["model"]
+    message_count = conv["messages"].size
+    
+    # Show first user message as preview
+    first_message = conv["messages"].find { |m| m["role"] == "user" }
+    preview = first_message ? first_message["content"][0..50] + "..." : "No messages"
+    
+    line = "#{timestamp} | #{model} | #{message_count} msgs | #{preview}"
+    
+    if i == @selected_conversation
+      content += " → #{line}".fg(226).b + "\n"
+    else
+      content += "   #{line}".fg(245) + "\n"
+    end
+  end
+  
+  @conversation_list_pane.text = content
+  @conversation_list_pane.full_refresh
+end
+
+# Load selected conversation
+def load_selected_conversation
+  return if @selected_conversation >= @conversation_history.size
+  
+  selected_conv = @conversation_history[@selected_conversation]
+  @current_conversation = selected_conv["messages"].dup
+  
+  # Update chat display
+  chat_content = ""
+  @current_conversation.each do |msg|
+    prefix = msg["role"] == "user" ? "You: ".b.fg(226) : "AI: ".b.fg(117)
+    wrapped = word_wrap(msg["content"], @chat_pane.w - 6)
+    formatted = wrapped.lines.map.with_index do |line, i|
+      if i == 0
+        "#{prefix}#{line}"
+      else
+        "     #{line}"
+      end
+    end.join
+    chat_content += formatted + "\n"
+  end
+  
+  @chat_pane.text = chat_content
+  @chat_pane.bottom
+  @chat_pane.full_refresh
+  
+  # Add system message directly to chat display (not to conversation history)
+  current_text = @chat_pane.text || ""
+  @chat_pane.text = current_text + "Conversation loaded!".fg(118) + "\n"
+  @chat_pane.bottom
+  @chat_pane.full_refresh
+end
+
+# Hide conversation list popup
+def hide_conversation_list
+  @conversation_list_visible = false
+  Rcurses.clear_screen
+  [@header, @chat_pane, @input_pane, @status_pane].each(&:full_refresh)
+end
+
+# Show version information
+def show_version
+  local_version = VERSION
+  
+  begin
+    remote_version = Gem.latest_version_for('openai-term').version
+    version_info = "Local version: #{local_version}\n"
+    version_info += "Latest RubyGems version: #{remote_version}\n"
+    
+    if Gem::Version.new(remote_version) > Gem::Version.new(local_version)
+      version_info += "Update available! Run: gem update openai-term".fg(226)
+    else
+      version_info += "You have the latest version!".fg(118)
+    end
+    
+    version_info += "\n\nGem info: https://rubygems.org/gems/openai-term"
+  rescue StandardError => e
+    version_info = "Local version: #{local_version}\n"
+    version_info += "Could not check latest version: #{e.message}".fg(196)
+    version_info += "\n\nGem info: https://rubygems.org/gems/openai-term"
+  end
+  
+  add_to_chat("system", version_info)
+end
+
+# Copy last AI response to clipboard
+def copy_last_ai_response
+  # Find the last assistant message
+  last_ai_message = @current_conversation.reverse.find { |msg| msg["role"] == "assistant" }
+  
+  if last_ai_message
+    content = last_ai_message["content"]
+    
+    # Try different clipboard commands based on OS
+    clipboard_cmd = case RUBY_PLATFORM
+    when /darwin/
+      "pbcopy"  # macOS
+    when /linux/
+      # Try xclip first, then xsel
+      system("which xclip > /dev/null 2>&1") ? "xclip -selection clipboard" : "xsel --clipboard --input"
+    when /mswin|mingw|cygwin/
+      "clip"    # Windows
+    else
+      nil
+    end
+    
+    if clipboard_cmd
+      begin
+        IO.popen(clipboard_cmd, 'w') { |io| io.write(content) }
+        add_to_chat("system", "AI response copied to clipboard!".fg(118))
+      rescue => e
+        add_to_chat("system", "Failed to copy to clipboard: #{e.message}".fg(196))
+      end
+    else
+      add_to_chat("system", "Clipboard not supported on this platform".fg(196))
+    end
+  else
+    add_to_chat("system", "No AI response to copy".fg(196))
+  end
+end
+
+# Process initial query
+def process_initial_query(options)
+  initial_text = ""
+  initial_text += options[:text] if options[:text]
+  initial_text += File.read(options[:file]) if options[:file] && File.exist?(options[:file])
+  
+  unless initial_text.empty?
+    if options[:quiet]
+      # Direct output mode
+      send_to_openai(initial_text, options[:image])
+      return :exit
+    else
+      send_to_openai(initial_text, options[:image])
+    end
+  end
+  nil
+end
+
+# Main program
+def main
+  options = parse_options
+  load_config(options[:config])
+  
+  # For quiet mode with initial query, skip UI entirely
+  if options[:quiet] && (options[:text] || options[:file])
+    init_client
+    initial_text = ""
+    initial_text += options[:text] if options[:text]
+    initial_text += File.read(options[:file]) if options[:file] && File.exist?(options[:file])
+    send_to_openai(initial_text, options[:image])
+    return
+  end
+  
+  load_history
+  init_client
+  setup_ui
+  
+  # Process initial query if provided
+  result = process_initial_query(options)
+  return if result == :exit
+  
+  # Initialize input pane with prompt before starting loop
+  @input_pane.text = "You: "
+  @input_pane.refresh
+  
+  # Main loop
+  input_loop
+  
+ensure
+  save_history if defined?(@conversation_history)
+  Cursor.show if defined?(Cursor)
+  Rcurses.clear_screen if defined?(Rcurses)
+end
+
+# Run the program
+main if __FILE__ == $0
