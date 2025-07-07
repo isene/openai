@@ -1,12 +1,12 @@
-# OpenAI Terminal 2.0 - Modern TUI for OpenAI
+# OpenAI Terminal 2.1 - Modern TUI for OpenAI
 
-A powerful, modern terminal interface for OpenAI's API featuring a full Text User Interface (TUI) built with rcurses. Version 2.0 is a complete rewrite offering interactive chat sessions, conversation management, model selection, and much more - all from your terminal.
+A powerful, modern terminal interface for OpenAI's API featuring a full Text User Interface (TUI) built with rcurses. Version 2.1 adds chat scrolling, enhanced UX, and improved conversation management - all from your terminal.
 
 ![Ruby](https://img.shields.io/badge/language-Ruby-red) [![Gem Version](https://badge.fury.io/rb/openai-term.svg)](https://badge.fury.io/rb/openai-term) ![Unlicense](https://img.shields.io/badge/license-Unlicense-green) ![Stay Amazing](https://img.shields.io/badge/Stay-Amazing-important)
 
-## 🎉 Version 2.0 - Major Release!
+## 🎉 Version 2.1 - Enhanced Experience!
 
-**Complete rewrite** with modern TUI interface using rcurses. This is a major upgrade from the simple command-line tool to a full-featured terminal application.
+**New features**: Chat window scrolling, improved UI consistency, and better conversation management. Built on the solid foundation of the 2.0 complete rewrite.
 
 ## ✨ Features
 
@@ -21,6 +21,8 @@ A powerful, modern terminal interface for OpenAI's API featuring a full Text Use
 ### User Experience
 - **⌨️ Vim-like Controls**: Command mode with printable characters entering input mode
 - **📜 Input History**: Navigate through previous messages with arrow keys
+- **📃 Chat Scrolling**: Scroll through long conversations with PgUp/PgDown
+- **🎨 Smart Prompts**: Dynamic prompt styling that dims when inactive
 - **🔄 Model Persistence**: Remembers your preferred model between sessions
 - **📁 Session Management**: Auto-save conversations and settings
 - **❓ Built-in Help**: Comprehensive help system with keyboard shortcuts
@@ -77,6 +79,7 @@ openai -q -t "Quick answer needed"
 | **Ctrl-V** | Show version information |
 | **Ctrl-I** | Generate image |
 | **↑/↓** | Navigate input history |
+| **PgUp/PgDn** | Scroll chat window up/down |
 | **Any char** | Start typing message |
 | **ESC** | Cancel input (in edit mode) |
 
@@ -116,9 +119,15 @@ Usage: openai [options]
 - rcurses gem (~> 3.5)
 - ruby-openai gem (~> 3.0)
 
-## 🆕 What's New in 2.0
+## 🆕 What's New in 2.1
 
-### Major Changes
+### New Features
+- **📃 Chat Window Scrolling**: Use PgUp/PgDown to scroll through long conversations
+- **🎨 Enhanced UI Consistency**: Input prompts now match chat window styling
+- **⏫ Latest Conversations First**: Conversation list now shows newest conversations at the top
+- **🖱️ Smart Prompt Behavior**: Input prompt dims when not in edit mode for better visual feedback
+
+### Previous Major Changes (2.0)
 - **Complete rewrite** using rcurses for modern TUI
 - **Interactive chat interface** with proper panes and layouts
 - **Real-time model selection** with live preview
@@ -126,22 +135,6 @@ Usage: openai [options]
 - **Enhanced input handling** with vim-like behavior
 - **Clipboard integration** for easy sharing
 - **Persistent settings** - remembers your preferences
-
-### Improved Features
-- **Better error handling** and user feedback
-- **Popup windows** for help and model selection
-- **Scrollable content** in all interface elements
-- **Input history navigation** with arrow keys
-- **Cancellable operations** with ESC key
-- **Version checking** against RubyGems
-
-### New Functionality
-- Load previous conversations and continue them
-- Copy AI responses directly to clipboard
-- Navigate through input history
-- Interactive model switching
-- Comprehensive help system
-- Version and update checking
 
 ## 📚 Examples
 

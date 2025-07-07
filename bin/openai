@@ -19,7 +19,7 @@ CONFIG_FILE = File.join(Dir.home, '.openai.conf')
 HISTORY_FILE = File.join(Dir.home, '.openai_history.json')
 DEFAULT_MODEL = "gpt-3.5-turbo"
 DEFAULT_MAX_TOKENS = 2048
-VERSION = "2.0"
+VERSION = "2.1"
 
 # Global variables
 @model = DEFAULT_MODEL
@@ -42,6 +42,7 @@ VERSION = "2.0"
 @input_text = ""
 @chat_scroll = 0
 @selected_model = 0
+@in_editline = false
 
 # Parse command line options
 def parse_options
@@ -58,7 +59,7 @@ def parse_options
     opts.on('-c', '--config FILE', 'Config file path') { |c| options[:config] = c }
     opts.on('-q', '--quiet', 'Skip TUI and output to stdout directly') { options[:quiet] = true }
     opts.on('-h', '--help', 'Display help') { puts opts; exit }
-    opts.on('-v', '--version', 'Display version') { puts "OpenAI Terminal 2.0"; exit }
+    opts.on('-v', '--version', 'Display version') { puts "OpenAI Terminal 2.1"; exit }
   end
   
   optparse.parse!
@@ -176,13 +177,13 @@ def setup_ui
   
   # Ensure status pane is visible at startup and input pane is ready
   @status_pane.refresh
-  @input_pane.text = ""
-  @input_pane.refresh
+  @in_editline = false
+  update_input_prompt
 end
 
 # Update header
 def update_header
-  title = "OpenAI Terminal v2.0".b.fg(226)
+  title = "OpenAI Terminal v2.1".b.fg(226)
   model_info = "Model: #{@model}".fg(117)
   tokens_info = "Max Tokens: #{@max_tokens}".fg(117)
   
@@ -203,7 +204,8 @@ def update_status
       "C-S:Save",
       "C-Y:Copy",
       "C-V:Version",
-      "C-I:Image"
+      "C-I:Image",
+      "PgUp/PgDn:Scroll"
     ].join("  ")
   when :model_select
     shortcuts = "↑↓:Navigate  Enter:Select  ESC:Cancel"
@@ -416,7 +418,7 @@ def show_help_popup
   @help_visible = true
   
   help_text = <<~HELP
-    #{"OpenAI Terminal Help".b.fg(226)}
+    #{"OpenAI Terminal Help v2.1".b.fg(226)}
     
     #{"Keyboard Shortcuts:".b.fg(117)}
     
@@ -429,6 +431,7 @@ def show_help_popup
     Ctrl-Y     - Copy last AI response to clipboard
     Ctrl-V     - Show version information
     Ctrl-I     - Generate image
+    PgUp/PgDn  - Scroll chat window up/down
     Any char   - Start typing message
     
     #{"Features:".b.fg(117)}
@@ -459,6 +462,43 @@ def hide_help_popup
   [@header, @chat_pane, @input_pane, @status_pane].each(&:full_refresh)
 end
 
+# Update input pane prompt with appropriate styling
+def update_input_prompt(text = "")
+  if @in_editline
+    # Bright prompt when in editline mode (matches chat window)
+    @input_pane.text = "You: ".b.fg(226) + text
+  else
+    # Dimmed prompt when not in editline mode
+    @input_pane.text = "You: ".fg(240) + text
+  end
+  @input_pane.refresh
+end
+
+# Scroll chat pane
+def scroll_chat_pane(lines)
+  return unless @chat_pane
+  
+  # Get current scroll position
+  current_scroll = @chat_pane.ix || 0
+  
+  # Calculate new scroll position
+  new_scroll = current_scroll + lines
+  
+  # Get total lines and visible lines to calculate scroll limits
+  total_lines = @chat_pane.text ? @chat_pane.text.lines.count : 0
+  visible_lines = @chat_pane.h - 2  # Account for border
+  max_scroll = [total_lines - visible_lines, 0].max
+  
+  # Constrain scroll position to valid range
+  new_scroll = [[new_scroll, 0].max, max_scroll].min
+  
+  # Apply scroll if it changed
+  if new_scroll != current_scroll
+    @chat_pane.ix = new_scroll
+    @chat_pane.refresh
+  end
+end
+
 # Navigate input history
 def navigate_input_history(direction, input_history, current_index)
   return if input_history.empty?
@@ -475,13 +515,13 @@ def navigate_input_history(direction, input_history, current_index)
   
   if new_index < input_history.size
     # Show historical message
-    @input_pane.text = "You: #{input_history[new_index]}"
+    @in_editline = false
+    update_input_prompt(input_history[new_index])
   else
     # Beyond history - empty input
-    @input_pane.text = "You: "
+    @in_editline = false
+    update_input_prompt
   end
-  
-  @input_pane.refresh
 end
 
 # Main input loop
@@ -492,7 +532,6 @@ def input_loop
   
   loop do
     key = getchr
-    
     
     # Handle popup input first
     if @help_visible
@@ -610,11 +649,19 @@ def input_loop
     when "DOWN"
       navigate_input_history(1, input_history, history_index)
       history_index = @current_history_index
+    when "PgUP"
+      # Scroll chat pane up
+      scroll_chat_pane(-10)
+    when "PgDOWN"
+      # Scroll chat pane down
+      scroll_chat_pane(10)
     when "C-I"
       # Image generation
-      @input_pane.prompt = "Image: "
+      @in_editline = true
+      @input_pane.prompt = "Image: ".b.fg(226)
       @input_pane.text = ""
       @input_pane.editline
+      @in_editline = false
       
       # Only generate image if user didn't cancel (ESC)
       final_text = @input_pane.text&.strip || ""
@@ -627,16 +674,18 @@ def input_loop
       end
       # Reset input pane completely
       @input_pane.clear
-      @input_pane.text = "You: "
-      @input_pane.full_refresh
+      @in_editline = false
+      update_input_prompt
     else
       # Any printable character -> Enter input pane editline
       if key && key.length == 1 && key.match?(/[[:print:]]/)
         # Set up for editline
-        @input_pane.prompt = "You: "
+        @in_editline = true
+        @input_pane.prompt = "You: ".b.fg(226)
         @input_pane.text = key
         initial_text = key
         @input_pane.editline
+        @in_editline = false
         
         # After editline returns, check what happened
         final_text = @input_pane.text&.strip || ""
@@ -661,10 +710,9 @@ def input_loop
         end
         
         # Always reset input pane completely (clears any remaining text)
-        @input_pane.text = "You: "
         @input_pane.clear
-        @input_pane.text = "You: "
-        @input_pane.full_refresh
+        @in_editline = false
+        update_input_prompt
       end
     end
   end
@@ -703,7 +751,7 @@ end
 def update_conversation_list
   content = "Load Conversation (↑↓ to navigate, Enter to load, Esc to cancel):".b.fg(226) + "\n\n"
   
-  @conversation_history.each_with_index do |conv, i|
+  @conversation_history.reverse.each_with_index do |conv, i|
     timestamp = conv["timestamp"]
     model = conv["model"]
     message_count = conv["messages"].size
@@ -729,7 +777,9 @@ end
 def load_selected_conversation
   return if @selected_conversation >= @conversation_history.size
   
-  selected_conv = @conversation_history[@selected_conversation]
+  # Account for reverse order in display
+  actual_index = @conversation_history.size - 1 - @selected_conversation
+  selected_conv = @conversation_history[actual_index]
   @current_conversation = selected_conv["messages"].dup
   
   # Update chat display
@@ -868,8 +918,8 @@ def main
   return if result == :exit
   
   # Initialize input pane with prompt before starting loop
-  @input_pane.text = "You: "
-  @input_pane.refresh
+  @in_editline = false
+  update_input_prompt
   
   # Main loop
   input_loop
