@@ -17,9 +17,9 @@ include Rcurses::Cursor
 # Constants
 CONFIG_FILE = File.join(Dir.home, '.openai.conf')
 HISTORY_FILE = File.join(Dir.home, '.openai_history.json')
-DEFAULT_MODEL = "gpt-3.5-turbo"
+DEFAULT_MODEL = "gpt-4-turbo-preview"
 DEFAULT_MAX_TOKENS = 2048
-VERSION = "2.1"
+VERSION = "2.2"
 
 # Global variables
 @model = DEFAULT_MODEL
@@ -273,7 +273,7 @@ end
 
 # Send message to OpenAI (includes user message display)
 def send_to_openai(message, generate_image = false)
-  add_to_chat("user", message) unless generate_image
+  add_to_chat("user", message) unless generate_image || !@chat_pane
   get_openai_response(message, generate_image)
 end
 
@@ -307,8 +307,13 @@ def get_openai_response(message, generate_image = false)
       end
     elsif @model.include?("gpt")
       # Prepare messages for chat models
-      messages = @current_conversation.map do |msg|
-        { role: msg["role"] == "user" ? "user" : "assistant", content: msg["content"] }
+      messages = if @current_conversation.empty? && !@chat_pane
+        # In quiet mode without conversation history, create a single message
+        [{ role: "user", content: message }]
+      else
+        @current_conversation.map do |msg|
+          { role: msg["role"] == "user" ? "user" : "assistant", content: msg["content"] }
+        end
       end
       
       response = @client.chat(
