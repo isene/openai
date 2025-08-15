@@ -5,7 +5,7 @@
 # A modern TUI for interacting with OpenAI's API
 
 require 'optparse'
-require 'ruby/openai'
+require 'openai'
 require 'rcurses'
 require 'json'
 require 'fileutils'
@@ -19,7 +19,7 @@ CONFIG_FILE = File.join(Dir.home, '.openai.conf')
 HISTORY_FILE = File.join(Dir.home, '.openai_history.json')
 DEFAULT_MODEL = "gpt-4-turbo-preview"
 DEFAULT_MAX_TOKENS = 2048
-VERSION = "3.0"
+VERSION = "3.0.1"
 
 # Global variables
 @model = DEFAULT_MODEL
