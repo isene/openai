@@ -19,7 +19,7 @@ CONFIG_FILE = File.join(Dir.home, '.openai.conf')
 HISTORY_FILE = File.join(Dir.home, '.openai_history.json')
 DEFAULT_MODEL = "gpt-4-turbo-preview"
 DEFAULT_MAX_TOKENS = 2048
-VERSION = "2.2"
+VERSION = "3.0"
 
 # Global variables
 @model = DEFAULT_MODEL
@@ -913,6 +913,9 @@ def main
     send_to_openai(initial_text, options[:image])
     return
   end
+  
+  # Initialize rcurses (required for rcurses 6.0.0+)
+  Rcurses.init!
   
   load_history
   init_client
