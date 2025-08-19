@@ -2,9 +2,7 @@
 
 ![Ruby](https://img.shields.io/badge/language-Ruby-red) [![Gem Version](https://badge.fury.io/rb/openai-term.svg)](https://badge.fury.io/rb/openai-term) ![Unlicense](https://img.shields.io/badge/license-Unlicense-green) ![Stay Amazing](https://img.shields.io/badge/Stay-Amazing-important)
 
-<img src="openai_logo.svg" width="150" height="150">
-
-A powerful, modern terminal interface for OpenAI's API featuring a full Text User Interface (TUI) built with rcurses. Version 2.1 adds chat scrolling, enhanced UX, and improved conversation management - all from your terminal.
+<img src="openai_logo.svg" align="left" width="150" height="150"> A powerful, modern terminal interface for OpenAI's API featuring a full Text User Interface (TUI) built with rcurses. Version 2.1 adds chat scrolling, enhanced UX, and improved conversation management - all from your terminal.
 
 ## 🎉 Version 2.1 - Enhanced Experience!
 
