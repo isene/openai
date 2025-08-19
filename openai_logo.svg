@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect x="0" y="0" width="200" height="200" fill="#0a0a0a"/>
+  
+  <!-- Central AI brain/network -->
+  <g transform="translate(100, 100)">
+    <!-- Neurons -->
+    <circle cx="0" cy="0" r="8" fill="#10a37f">
+      <animate attributeName="opacity" values="0.4;1;0.4" dur="3s" repeatCount="indefinite"/>
+    </circle>
+    
+    <!-- Connections with subtle animation -->
+    <g stroke="#10a37f" stroke-width="2" fill="none" opacity="0.6">
+      <!-- Top connections -->
+      <line x1="0" y1="-8" x2="0" y2="-40">
+        <animate attributeName="stroke-opacity" values="0.3;1;0.3" dur="2s" repeatCount="indefinite"/>
+      </line>
+      <circle cx="0" cy="-40" r="5" fill="#10a37f"/>
+      
+      <!-- Top-right -->
+      <line x1="6" y1="-6" x2="30" y2="-30">
+        <animate attributeName="stroke-opacity" values="0.3;1;0.3" dur="2s" begin="0.3s" repeatCount="indefinite"/>
+      </line>
+      <circle cx="30" cy="-30" r="5" fill="#10a37f"/>
+      
+      <!-- Right -->
+      <line x1="8" y1="0" x2="40" y2="0">
+        <animate attributeName="stroke-opacity" values="0.3;1;0.3" dur="2s" begin="0.6s" repeatCount="indefinite"/>
+      </line>
+      <circle cx="40" cy="0" r="5" fill="#10a37f"/>
+      
+      <!-- Bottom-right -->
+      <line x1="6" y1="6" x2="30" y2="30">
+        <animate attributeName="stroke-opacity" values="0.3;1;0.3" dur="2s" begin="0.9s" repeatCount="indefinite"/>
+      </line>
+      <circle cx="30" cy="30" r="5" fill="#10a37f"/>
+      
+      <!-- Bottom -->
+      <line x1="0" y1="8" x2="0" y2="40">
+        <animate attributeName="stroke-opacity" values="0.3;1;0.3" dur="2s" begin="1.2s" repeatCount="indefinite"/>
+      </line>
+      <circle cx="0" cy="40" r="5" fill="#10a37f"/>
+      
+      <!-- Bottom-left -->
+      <line x1="-6" y1="6" x2="-30" y2="30">
+        <animate attributeName="stroke-opacity" values="0.3;1;0.3" dur="2s" begin="1.5s" repeatCount="indefinite"/>
+      </line>
+      <circle cx="-30" cy="30" r="5" fill="#10a37f"/>
+      
+      <!-- Left -->
+      <line x1="-8" y1="0" x2="-40" y2="0">
+        <animate attributeName="stroke-opacity" values="0.3;1;0.3" dur="2s" begin="1.8s" repeatCount="indefinite"/>
+      </line>
+      <circle cx="-40" cy="0" r="5" fill="#10a37f"/>
+      
+      <!-- Top-left -->
+      <line x1="-6" y1="-6" x2="-30" y2="-30">
+        <animate attributeName="stroke-opacity" values="0.3;1;0.3" dur="2s" begin="2.1s" repeatCount="indefinite"/>
+      </line>
+      <circle cx="-30" cy="-30" r="5" fill="#10a37f"/>
+    </g>
+  </g>
+  
+  <!-- Ruby gem accent -->
+  <g transform="translate(170, 30) scale(0.3)">
+    <path d="M -20 -10 L 20 -10 L 30 0 L 20 10 L -20 10 L -30 0 Z" fill="#CC342D" opacity="0.7"/>
+  </g>
+  
+  <!-- Text -->
+  <text x="100" y="165" font-family="monospace" font-size="20" fill="#10a37f" text-anchor="middle" font-weight="bold">OpenAI</text>
+  <text x="100" y="180" font-family="monospace" font-size="10" fill="#666" text-anchor="middle">Ruby Client</text>
+</svg>
