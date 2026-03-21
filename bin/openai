@@ -18,7 +18,10 @@ CONFIG_FILE = File.join(Dir.home, '.openai.conf')
 HISTORY_FILE = File.join(Dir.home, '.openai_history.json')
 DEFAULT_MODEL = "gpt-4-turbo-preview"
 DEFAULT_MAX_TOKENS = 2048
-VERSION = "3.0.2"
+VERSION = "3.0.3"
+REQUEST_TIMEOUT = 30
+MAX_RETRIES = 2
+RETRY_DELAY = 2
 
 # Global variables
 @model = DEFAULT_MODEL
@@ -138,8 +141,37 @@ end
 # Initialize OpenAI client
 def init_client
   @client = OpenAI::Client.new(
-    access_token: @api_key
+    access_token: @api_key,
+    request_timeout: REQUEST_TIMEOUT
   )
+end
+
+# Retry wrapper for transient API failures
+def with_retry
+  retries = 0
+  begin
+    yield
+  rescue Net::OpenTimeout, Net::ReadTimeout, Errno::ETIMEDOUT => e
+    if retries < MAX_RETRIES
+      retries += 1
+      msg = "Timeout, retrying (#{retries}/#{MAX_RETRIES})..."
+      @chat_pane ? add_to_chat("system", msg.fg(208)) : $stderr.puts(msg)
+      sleep(RETRY_DELAY)
+      retry
+    end
+    raise
+  rescue Faraday::Error => e
+    status = e.respond_to?(:response_status) ? e.response_status : nil
+    if status && [429, 500, 502, 503].include?(status) && retries < MAX_RETRIES
+      retries += 1
+      delay = status == 429 ? RETRY_DELAY * 2 : RETRY_DELAY
+      msg = "HTTP #{status}, retrying (#{retries}/#{MAX_RETRIES})..."
+      @chat_pane ? add_to_chat("system", msg.fg(208)) : $stderr.puts(msg)
+      sleep(delay)
+      retry
+    end
+    raise
+  end
 end
 
 # Setup UI
@@ -309,13 +341,15 @@ def get_openai_response(message, generate_image = false)
   
   begin
     if generate_image
-      response = @client.images.generate(
-        parameters: {
-          prompt: message,
-          n: 1,
-          size: "1024x1024"
-        }
-      )
+      response = with_retry do
+        @client.images.generate(
+          parameters: {
+            prompt: message,
+            n: 1,
+            size: "1024x1024"
+          }
+        )
+      end
       
       url = response.dig("data", 0, "url")
       if url
@@ -334,28 +368,32 @@ def get_openai_response(message, generate_image = false)
         end
       end
       
-      response = @client.chat(
-        parameters: {
-          model: @model,
-          messages: messages,
-          max_tokens: @max_tokens,
-          temperature: @temperature
-        }
-      )
+      response = with_retry do
+        @client.chat(
+          parameters: {
+            model: @model,
+            messages: messages,
+            max_tokens: @max_tokens,
+            temperature: @temperature
+          }
+        )
+      end
       
       content = response.dig("choices", 0, "message", "content")
     else
       # Use completion for older models
       prompt = @current_conversation.map { |m| "#{m['role']}: #{m['content']}" }.join("\n") + "\nassistant:"
       
-      response = @client.completions(
-        parameters: {
-          model: @model,
-          prompt: prompt,
-          max_tokens: @max_tokens,
-          temperature: @temperature
-        }
-      )
+      response = with_retry do
+        @client.completions(
+          parameters: {
+            model: @model,
+            prompt: prompt,
+            max_tokens: @max_tokens,
+            temperature: @temperature
+          }
+        )
+      end
       
       content = response.dig("choices", 0, "text")
     end
@@ -398,7 +436,7 @@ def show_model_selection
   
   # Get available models
   begin
-    models_response = @client.models.list
+    models_response = with_retry { @client.models.list }
     @available_models = models_response["data"]
       .map { |m| m["id"] }
       .select { |id| id.include?("gpt") || id.include?("davinci") || id.include?("curie") }
@@ -951,9 +989,11 @@ def main
   input_loop
   
 ensure
-  save_history if defined?(@conversation_history)
-  Rcurses::Cursor.show if defined?(Rcurses::Cursor)
-  Rcurses.clear_screen if defined?(Rcurses)
+  if @chat_pane  # Only cleanup UI if TUI was initialized
+    save_history if defined?(@conversation_history)
+    Rcurses::Cursor.show if defined?(Rcurses::Cursor)
+    Rcurses.clear_screen if defined?(Rcurses)
+  end
 end
 
 # Run the program

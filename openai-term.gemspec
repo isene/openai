@@ -1,9 +1,9 @@
 Gem::Specification.new do |s|
   s.name        = 'openai-term'
-  s.version     = '3.0.2'
+  s.version     = '3.0.3'
   s.licenses    = ['Unlicense']
   s.summary     = "openai is a terminal interface to the OpenAI solution at beta.openai.com"
-  s.description = "A modern terminal interface to OpenAI with a full TUI using rcurses. Features include interactive chat mode, conversation history, model selection, and more. Version 3.0.2: Complete fix for ruby-openai 3.7.0 compatibility - using 'ruby/openai' for backward compatibility, fixed Rcurses::Pane and Rcurses::Cursor references, added missing io/console requirement, improved configuration help."
+  s.description = "A modern terminal interface to OpenAI with a full TUI using rcurses. Features include interactive chat mode, conversation history, model selection, and more. Version 3.0.3: Add configurable request timeout and retry logic for transient API failures (timeout, 429, 500/502/503)."
   s.authors     = ["Geir Isene"]
   s.email       = 'g@isene.com'
   s.files       = ["bin/openai"]
